@@ -98,9 +98,7 @@ public static class ClientHandler
                 if (missed >= maxMissed)
                 {
                     Utils.LogServerMessage($"PING timeout - {client.RemoteEndPoint} usuniety", ConsoleColor.Red);
-                    try { server.ActiveClients.Remove(client); } catch { }
-                    try { client.Shutdown(SocketShutdown.Both); } catch { }
-                    try { client.Close(); } catch { }
+                    await server.QuitSession(client, false);
                     return;
                 }
 
@@ -121,9 +119,7 @@ public static class ClientHandler
                 if (missed >= maxMissed)
                 {
                     Utils.LogServerMessage($"PING timeout - {client.RemoteEndPoint} usuniety", ConsoleColor.Red);
-                    try { server.ActiveClients.Remove(client); } catch { }
-                    try { client.Shutdown(SocketShutdown.Both); } catch { }
-                    try { client.Close(); } catch { }
+                    await server.QuitSession(client, false);
                     return;
                 }
             }

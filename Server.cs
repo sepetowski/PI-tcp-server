@@ -28,7 +28,37 @@ public class Server
         }
     }
 
-    internal async Task<bool> QuitSession(Socket client)
+    internal async Task<bool> QuitSession(Socket client, bool disconnectedByUser = true)
+    {
+        try
+        {
+            if (ActiveClients.TryGetValue(client, out var name))
+            {
+                client.Shutdown(SocketShutdown.Receive);
+
+                if (disconnectedByUser)
+                {
+                    Utils.LogServerMessage($"Klient '{name}' ({client.RemoteEndPoint}) rozłączył się.", ConsoleColor.Yellow);
+                    await Utils.SendLineAsync(client, "BYE");
+                }
+
+                ActiveClients.Remove(client);
+                client.Close();
+                return true;
+            }
+            else
+            {
+                throw new Exception("Brak klienta");
+            }
+        }
+        catch (Exception ex)
+        {
+            Utils.LogServerMessage($"Błąd podczas rozłączania {client.RemoteEndPoint}: {ex.Message}", ConsoleColor.Red);
+            return false;
+        }
+    }
+
+    internal async Task<bool> ClientDisconnected(Socket client)
     {
         try
         {
@@ -37,10 +67,7 @@ public class Server
                 ActiveClients.Remove(client);
                 Utils.LogServerMessage($"Klient '{name}' ({client.RemoteEndPoint}) rozłączył się.", ConsoleColor.Yellow);
             }
-            else
-            {
-                Utils.LogServerMessage($"Nieznany klient {client.RemoteEndPoint} rozłączył się.", ConsoleColor.Yellow);
-            }
+
 
             await Utils.SendLineAsync(client, "BYE");
             client.Close();
@@ -72,7 +99,7 @@ public class Server
         var targetClient = ActiveClients.FirstOrDefault(x => x.Value == target).Key;
         var text = (message ?? string.Empty).Trim();
 
-        if(targetClient == null)
+        if (targetClient == null)
         {
             Utils.LogServerMessage($"Brak uzytkownika o id {target}", ConsoleColor.Red);
             await Utils.SendLineAsync(client, "ERR_BADREQUEST");
