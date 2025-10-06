@@ -17,13 +17,13 @@ public class Server
         serverSocket.Bind(localEndPoint);
         serverSocket.Listen(100);
 
-        Utils.LogServerMessage($"Nasłuchuję na porcie {port}.", ConsoleColor.Cyan);
-        Utils.LogServerMessage("Czekam na połączenie klienta.", ConsoleColor.DarkGray);
+        Utils.LogServerMessage($"Listening on port {port}.", ConsoleColor.Cyan);
+        Utils.LogServerMessage("Waiting for a client connection.", ConsoleColor.DarkGray);
 
         while (true)
         {
             var client = await serverSocket.AcceptAsync();
-            Utils.LogServerMessage($"Nowe połączenie od {client.RemoteEndPoint}", ConsoleColor.Green);
+            Utils.LogServerMessage($"New connection from {client.RemoteEndPoint}", ConsoleColor.Green);
             _ = Task.Run(() => ClientHandler.HandleClientConnectionAsync(client, this));
         }
     }
@@ -38,7 +38,7 @@ public class Server
 
                 if (disconnectedByUser)
                 {
-                    Utils.LogServerMessage($"Klient '{name}' ({client.RemoteEndPoint}) rozłączył się.", ConsoleColor.Yellow);
+                    Utils.LogServerMessage($"Client '{name}' ({client.RemoteEndPoint}) disconnected.", ConsoleColor.Yellow);
                     await Utils.SendLineAsync(client, "BYE");
                 }
 
@@ -48,12 +48,12 @@ public class Server
             }
             else
             {
-                throw new Exception("Brak klienta");
+                throw new Exception("Client not found");
             }
         }
         catch (Exception ex)
         {
-            Utils.LogServerMessage($"Błąd podczas rozłączania {client.RemoteEndPoint}: {ex.Message}", ConsoleColor.Red);
+            Utils.LogServerMessage($"Error while disconnecting {client.RemoteEndPoint}: {ex.Message}", ConsoleColor.Red);
             return false;
         }
     }
@@ -65,9 +65,8 @@ public class Server
             if (ActiveClients.TryGetValue(client, out var name))
             {
                 ActiveClients.Remove(client);
-                Utils.LogServerMessage($"Klient '{name}' ({client.RemoteEndPoint}) rozłączył się.", ConsoleColor.Yellow);
+                Utils.LogServerMessage($"Client '{name}' ({client.RemoteEndPoint}) disconnected.", ConsoleColor.Yellow);
             }
-
 
             await Utils.SendLineAsync(client, "BYE");
             client.Close();
@@ -76,22 +75,20 @@ public class Server
         }
         catch (Exception ex)
         {
-            Utils.LogServerMessage($"Błąd podczas rozłączania {client.RemoteEndPoint}: {ex.Message}", ConsoleColor.Red);
+            Utils.LogServerMessage($"Error while disconnecting {client.RemoteEndPoint}: {ex.Message}", ConsoleColor.Red);
             return false;
         }
     }
 
     internal async Task ListAllActiveUsers(Socket client)
     {
-        Utils.LogServerMessage($"Klient {client.RemoteEndPoint} poprosił o listę aktywnych użytkowników.", ConsoleColor.Cyan);
 
         foreach (var name in ActiveClients.Values)
         {
             await Utils.SendLineAsync(client, name);
         }
 
-        await Utils.SendLineAsync(client, "END");
-        Utils.LogServerMessage($"Lista aktywnych użytkowników wysłana do {client.RemoteEndPoint}", ConsoleColor.DarkGray);
+        Utils.LogServerMessage($"List of active users sent to {client.RemoteEndPoint}", ConsoleColor.DarkGray);
     }
 
     internal async Task SendMessageToUserAsync(Socket client, string target, string message)
@@ -101,28 +98,28 @@ public class Server
 
         if (targetClient == null)
         {
-            Utils.LogServerMessage($"Brak uzytkownika o id {target}", ConsoleColor.Red);
+            Utils.LogServerMessage($"No user with id {target}", ConsoleColor.Red);
             await Utils.SendLineAsync(client, "ERR_BADREQUEST");
             return;
         }
 
         if (text.Length == 0)
         {
-            Utils.LogServerMessage($"Nieprawidłowa wiadomość od {client.RemoteEndPoint} do {target}", ConsoleColor.Red);
+            Utils.LogServerMessage($"Invalid message from {client.RemoteEndPoint} to {target}", ConsoleColor.Red);
             await Utils.SendLineAsync(client, "ERR_BADREQUEST");
             return;
         }
 
         if (text.Length > 256)
         {
-            Utils.LogServerMessage($"Zbyt długa wiadomość od {client.RemoteEndPoint} (>{text.Length} znaków)", ConsoleColor.Red);
+            Utils.LogServerMessage($"Message too long from {client.RemoteEndPoint} (>{text.Length} characters)", ConsoleColor.Red);
             await Utils.SendLineAsync(client, "ERR_MESSAGETOOLARGE");
             return;
         }
 
         if (!ActiveClients.TryGetValue(client, out var senderId) || string.IsNullOrWhiteSpace(senderId))
         {
-            Utils.LogServerMessage($"Klient {client.RemoteEndPoint} próbował wysłać wiadomość bez ID", ConsoleColor.Red);
+            Utils.LogServerMessage($"Client {client.RemoteEndPoint} tried to send a message without ID", ConsoleColor.Red);
             await Utils.SendLineAsync(client, "ERR_BADREQUEST");
             return;
         }
@@ -134,11 +131,11 @@ public class Server
         {
             await Utils.SendLineAsync(targetClient, $"FROM {senderId} {ascii}");
             await Utils.SendLineAsync(client, "OK");
-            Utils.LogServerMessage($"Wiadomość od '{senderId}' do '{target}' wyslana", ConsoleColor.Magenta);
+            Utils.LogServerMessage($"Message from '{senderId}' to '{target}' sent", ConsoleColor.Magenta);
         }
         catch (Exception ex)
         {
-            Utils.LogServerMessage($"Błąd wysyłania wiadomości do '{target}' ({client.RemoteEndPoint}): {ex.Message}", ConsoleColor.Red);
+            Utils.LogServerMessage($"Error sending message to '{target}' ({client.RemoteEndPoint}): {ex.Message}", ConsoleColor.Red);
             await Utils.SendLineAsync(client, "ERR_TIMEOUT");
         }
     }
@@ -147,17 +144,17 @@ public class Server
     {
         if (id.Length != 8)
         {
-            Utils.LogServerMessage($"Odrzucono ID '{id}' – niepoprawna długość ({id.Length}).", ConsoleColor.Red);
+            Utils.LogServerMessage($"Rejected ID '{id}' – invalid length ({id.Length}).", ConsoleColor.Red);
             return NameCheck.WrongLength;
         }
 
         if (!CanUseName(id))
         {
-            Utils.LogServerMessage($"Odrzucono ID '{id}' – już w użyciu.", ConsoleColor.Yellow);
+            Utils.LogServerMessage($"Rejected ID '{id}' – already in use.", ConsoleColor.Yellow);
             return NameCheck.InUse;
         }
 
-        Utils.LogServerMessage($"ID '{id}' jest dostępne.", ConsoleColor.Green);
+        Utils.LogServerMessage($"ID '{id}' is available.", ConsoleColor.Green);
         return NameCheck.Ok;
     }
 

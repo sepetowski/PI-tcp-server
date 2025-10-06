@@ -10,79 +10,88 @@ public static class CommandParser
         public KnewCoammnads Command { get; init; }
         public string[] Args { get; init; }
         public ParseError Error { get; init; }
+
+        public static Result ErrorResult(ParseError e, KnewCoammnads cmd = default) =>
+            new() { Ok = false, Error = e, Command = cmd, Args = Array.Empty<string>() };
+
+        public static Result OkResult(KnewCoammnads cmd, params string[] args) =>
+            new() { Ok = true, Command = cmd, Args = args ?? Array.Empty<string>() };
     }
-
-    private sealed class Spec
-    {
-        public KnewCoammnads Cmd { get; }
-        public int RequiredArgs { get; }              
-        public bool RemainderToLast { get; }            
-
-        public Spec(KnewCoammnads cmd, int requiredArgs, bool remainderToLast = false)
-        {
-            Cmd = cmd;
-            RequiredArgs = requiredArgs;
-            RemainderToLast = remainderToLast;
-        }
-    }
-
-    private static readonly Dictionary<string, Spec> _specs =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "QUIT", new Spec(KnewCoammnads.QUIT, 0) },
-            { "LIST", new Spec(KnewCoammnads.LIST, 0) },
-            { "NAME", new Spec(KnewCoammnads.NAME, 1) },
-            { "MESG", new Spec(KnewCoammnads.MESG, 2, remainderToLast: true) },
-        };
 
     public static Result Parse(string line)
     {
         if (string.IsNullOrWhiteSpace(line))
-            return new Result { Ok = false, Error = ParseError.UnknownCommand };
+            return Result.ErrorResult(ParseError.UnknownCommand);
 
-        var tokens = line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var verb = tokens[0];
+        line = line.Trim();
 
-        if (!_specs.TryGetValue(verb, out var spec))
-            return new Result { Ok = false, Error = ParseError.UnknownCommand };
+        // Extract verb
+        int space = IndexOfSpace(line);
+        string verb = (space < 0 ? line : line[..space]).Trim();
+        string rest = (space < 0 ? "" : line[(space + 1)..]).Trim();
 
-        var presentArgs = tokens.Length - 1;
-
-        if (spec.RemainderToLast)
+        switch (verb.ToUpperInvariant())
         {
-            // Np. MESG: pierwszy argument prosty (id), drugi = reszta linii
-            var simpleCount = spec.RequiredArgs - 1;
-            if (presentArgs < simpleCount)
-                return new Result { Ok = false, Command = spec.Cmd, Error = ParseError.MissingArgs };
+            case "QUIT":
+                return ParseZeroArgs(rest, KnewCoammnads.QUIT);
 
-            var args = new List<string>(spec.RequiredArgs);
+            case "LIST":
+                return ParseZeroArgs(rest, KnewCoammnads.LIST);
 
-            // proste argumenty (bez spacji)
-            for (int i = 0; i < simpleCount; i++)
-                args.Add(tokens[1 + i]);
+            case "NAME":
+                return ParseExactlyOneArg(rest, KnewCoammnads.NAME);
 
-            // reszta linii jako ostatni argument (może mieć spacje)
-            var remainderStart = 1 + simpleCount;
-            var remainder = remainderStart < tokens.Length
-                ? string.Join(' ', tokens, remainderStart, tokens.Length - remainderStart)
-                : "";
+            case "MESG":
+                return ParseMesg(rest);
 
-            if (string.IsNullOrEmpty(remainder))
-                return new Result { Ok = false, Command = spec.Cmd, Error = ParseError.MissingArgs };
-
-            args.Add(remainder);
-            return new Result { Ok = true, Command = spec.Cmd, Args = args.ToArray() };
+            default:
+                return Result.ErrorResult(ParseError.UnknownCommand);
         }
-        else
-        {
-            if (presentArgs < spec.RequiredArgs)
-                return new Result { Ok = false, Command = spec.Cmd, Error = ParseError.MissingArgs };
-            if (presentArgs > spec.RequiredArgs)
-                return new Result { Ok = false, Command = spec.Cmd, Error = ParseError.TooManyArgs };
+    }
 
-            var args = new string[spec.RequiredArgs];
-            Array.Copy(tokens, 1, args, 0, spec.RequiredArgs);
-            return new Result { Ok = true, Command = spec.Cmd, Args = args };
-        }
+    private static Result ParseZeroArgs(string rest, KnewCoammnads cmd)
+    {
+        if (string.IsNullOrEmpty(rest)) return Result.OkResult(cmd);
+        return Result.ErrorResult(ParseError.TooManyArgs, cmd);
+    }
+
+    private static Result ParseExactlyOneArg(string rest, KnewCoammnads cmd)
+    {
+        if (string.IsNullOrEmpty(rest))
+            return Result.ErrorResult(ParseError.MissingArgs, cmd);
+
+        // Take first token as the only arg
+        int space = IndexOfSpace(rest);
+        if (space < 0) return Result.OkResult(cmd, rest);
+
+        // More than one token → too many
+        return Result.ErrorResult(ParseError.TooManyArgs, cmd);
+    }
+
+    private static Result ParseMesg(string rest)
+    {
+        // Needs at least: <toId> <message...>
+        if (string.IsNullOrEmpty(rest))
+            return Result.ErrorResult(ParseError.MissingArgs, KnewCoammnads.MESG);
+
+        // First token = recipient ID
+        int space = IndexOfSpace(rest);
+        if (space < 0)
+            return Result.ErrorResult(ParseError.MissingArgs, KnewCoammnads.MESG);
+
+        string toId = rest[..space].Trim();
+        string message = rest[(space + 1)..].Trim();
+
+        if (string.IsNullOrEmpty(toId) || string.IsNullOrEmpty(message))
+            return Result.ErrorResult(ParseError.MissingArgs, KnewCoammnads.MESG);
+
+        return Result.OkResult(KnewCoammnads.MESG, toId, message);
+    }
+
+    private static int IndexOfSpace(string s)
+    {
+        for (int i = 0; i < s.Length; i++)
+            if (char.IsWhiteSpace(s[i])) return i;
+        return -1;
     }
 }

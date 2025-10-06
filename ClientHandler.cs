@@ -11,7 +11,7 @@ public static class ClientHandler
         using var cts = new CancellationTokenSource();
         var lastPong = DateTime.UtcNow;
         var buffer = new byte[1024];
-        Utils.LogServerMessage($"Klient połączony: {client.RemoteEndPoint}", ConsoleColor.Green);
+        Utils.LogServerMessage($"Client connected: {client.RemoteEndPoint}", ConsoleColor.Green);
 
         await AuthorizeUser(client, buffer, server);
         _ = PingLoopAsync(client, () => lastPong, server, cts.Token);
@@ -23,7 +23,7 @@ public static class ClientHandler
             if (message.Equals("PONG", StringComparison.OrdinalIgnoreCase))
             {
                 lastPong = DateTime.UtcNow;
-                Utils.LogServerMessage($"PONG od {client.RemoteEndPoint}", ConsoleColor.DarkGray);
+                Utils.LogServerMessage($"PONG from {client.RemoteEndPoint}", ConsoleColor.DarkGray);
                 continue;
             }
 
@@ -31,7 +31,7 @@ public static class ClientHandler
 
             if (!parsed.Ok)
             {
-                Utils.LogServerMessage($"Błąd parsowania komendy od {client.RemoteEndPoint}: {message}", ConsoleColor.Yellow);
+                Utils.LogServerMessage($"Command parsing error from {client.RemoteEndPoint}: {message}", ConsoleColor.Yellow);
 
                 switch (parsed.Error)
                 {
@@ -72,9 +72,9 @@ public static class ClientHandler
 
     private static async Task PingLoopAsync(Socket client, Func<DateTime> getLastPong, Server server, CancellationToken ct)
     {
-        const int pingIntervalMs = 10_000; // co 10 s
-        const int pongTimeoutMs = 5_000;  // czekamy max 5 s na PONG
-        const int maxMissed = 3;      // po 3 braku PONG/nieudanym PING usuwamy klienta
+        const int pingIntervalMs = 10_000; 
+        const int pongTimeoutMs = 5_000;   
+        const int maxMissed = 3;           
 
         int missed = 0;
 
@@ -82,7 +82,7 @@ public static class ClientHandler
         {
             DateTime sentAt;
 
-            // 1) Spróbuj wysłać PING
+            // 1) Try to send PING
             try
             {
                 await Utils.SendLineAsync(client, "PING");
@@ -91,57 +91,55 @@ public static class ClientHandler
             }
             catch
             {
-                // Nieudany PING
+                // Failed PING
                 missed++;
-                Utils.LogServerMessage($"Nieudany PING #{missed} do {client.RemoteEndPoint}", ConsoleColor.Yellow);
+                Utils.LogServerMessage($"Failed PING #{missed} to {client.RemoteEndPoint}", ConsoleColor.Yellow);
 
                 if (missed >= maxMissed)
                 {
-                    Utils.LogServerMessage($"PING timeout - {client.RemoteEndPoint} usuniety", ConsoleColor.Red);
+                    Utils.LogServerMessage($"PING timeout - {client.RemoteEndPoint} removed", ConsoleColor.Red);
                     await server.QuitSession(client, false);
                     return;
                 }
 
-                // Odczekaj do następnej próby
+                // Wait for next attempt
                 try { await Task.Delay(pingIntervalMs, ct); } catch { }
                 continue;
             }
 
-            // 2) Czekamy na PONG
+            // 2) Wait for PONG
             try { await Task.Delay(pongTimeoutMs, ct); } catch { }
 
-            // 3) Sprawdzamy czy PONG przyszedł po tym konkretnym PING
+            // 3) Check if PONG arrived after this PING
             if (getLastPong() < sentAt)
             {
                 missed++;
-                Utils.LogServerMessage($"Brak PONG #{missed} od {client.RemoteEndPoint}", ConsoleColor.Yellow);
+                Utils.LogServerMessage($"No PONG #{missed} from {client.RemoteEndPoint}", ConsoleColor.Yellow);
 
                 if (missed >= maxMissed)
                 {
-                    Utils.LogServerMessage($"PING timeout - {client.RemoteEndPoint} usuniety", ConsoleColor.Red);
+                    Utils.LogServerMessage($"PING timeout - {client.RemoteEndPoint} removed", ConsoleColor.Red);
                     await server.QuitSession(client, false);
                     return;
                 }
             }
             else
             {
-                // PONG wrócił – reset
+                // PONG received – reset
                 if (missed > 0)
-                    Utils.LogServerMessage($"PONG odzyskany po {missed} nieudanych próbach od {client.RemoteEndPoint}", ConsoleColor.DarkGray);
+                    Utils.LogServerMessage($"PONG recovered after {missed} failed attempts from {client.RemoteEndPoint}", ConsoleColor.DarkGray);
 
                 missed = 0;
             }
 
-            // 4) Odstęp między PING-ami
+            // 4) Delay between PINGs
             try { await Task.Delay(pingIntervalMs, ct); } catch { }
         }
     }
 
-
-
     private static async Task AuthorizeUser(Socket client, byte[] buffer, Server server)
     {
-        Utils.LogServerMessage($"Rozpoczynam autoryzację klienta {client.RemoteEndPoint}", ConsoleColor.Cyan);
+        Utils.LogServerMessage($"Starting client authorization {client.RemoteEndPoint}", ConsoleColor.Cyan);
         await Utils.SendLineAsync(client, "WHO");
 
         while (true)
@@ -151,7 +149,7 @@ public static class ClientHandler
 
             if (!parsed.Ok)
             {
-                Utils.LogServerMessage($"Błąd parsowania komendy w autoryzacji od {client.RemoteEndPoint}: {message}", ConsoleColor.Yellow);
+                Utils.LogServerMessage($"Command parsing error during authorization from {client.RemoteEndPoint}: {message}", ConsoleColor.Yellow);
 
                 switch (parsed.Error)
                 {
@@ -182,7 +180,7 @@ public static class ClientHandler
             switch (parsed.Command)
             {
                 case KnewCoammnads.QUIT:
-                    Utils.LogServerMessage($"Klient {client.RemoteEndPoint} zakończył połączenie podczas autoryzacji", ConsoleColor.Yellow);
+                    Utils.LogServerMessage($"Client {client.RemoteEndPoint} disconnected during authorization", ConsoleColor.Yellow);
                     await Utils.SendLineAsync(client, "BYE");
                     await server.QuitSession(client);
                     return;
@@ -194,12 +192,12 @@ public static class ClientHandler
                         switch (server.ValidateName(id))
                         {
                             case NameCheck.WrongLength:
-                                Utils.LogServerMessage($"Klient {client.RemoteEndPoint} podał ID o złej długości: {id}", ConsoleColor.Red);
+                                Utils.LogServerMessage($"Client {client.RemoteEndPoint} provided an ID with invalid length: {id}", ConsoleColor.Red);
                                 await Utils.SendLineAsync(client, "WHO");
                                 continue;
 
                             case NameCheck.InUse:
-                                Utils.LogServerMessage($"Klient {client.RemoteEndPoint} podał zajęty ID: {id}", ConsoleColor.Yellow);
+                                Utils.LogServerMessage($"Client {client.RemoteEndPoint} provided an already used ID: {id}", ConsoleColor.Yellow);
                                 await Utils.SendLineAsync(client, "ERR_NICKNAMEINUSE");
                                 await Utils.SendLineAsync(client, "WHO");
                                 continue;
@@ -207,22 +205,22 @@ public static class ClientHandler
                             case NameCheck.Ok:
                                 if (!server.ActiveClients.TryAdd(client, id))
                                 {
-                                    Utils.LogServerMessage($"Nie udało się dodać ID {id} dla {client.RemoteEndPoint} (już istnieje)", ConsoleColor.Red);
+                                    Utils.LogServerMessage($"Failed to add ID {id} for {client.RemoteEndPoint} (already exists)", ConsoleColor.Red);
                                     await Utils.SendLineAsync(client, "ERR_NICKNAMEINUSE");
                                     await Utils.SendLineAsync(client, "WHO");
                                     continue;
                                 }
 
-                                Utils.LogServerMessage($"Autoryzacja zakończona – {client.RemoteEndPoint} = '{id}'", ConsoleColor.Green);
+                                Utils.LogServerMessage($"Authorization completed – {client.RemoteEndPoint} = '{id}'", ConsoleColor.Green);
                                 await Utils.SendLineAsync(client, "OK");
-                                return; // autoryzacja zakończona
+                                return; // authorization finished
                         }
 
                         break;
                     }
 
                 default:
-                    Utils.LogServerMessage($"Nieoczekiwana komenda podczas autoryzacji od {client.RemoteEndPoint}: {parsed.Command}", ConsoleColor.Yellow);
+                    Utils.LogServerMessage($"Unexpected command during authorization from {client.RemoteEndPoint}: {parsed.Command}", ConsoleColor.Yellow);
                     await Utils.SendLineAsync(client, "WHO");
                     continue;
             }
