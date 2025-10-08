@@ -28,57 +28,22 @@ public class Server
         }
     }
 
-    internal async Task<bool> QuitSession(Socket client, bool disconnectedByUser = true)
+    internal async Task QuitSession(Socket client, bool sendMessageToClient = true)
     {
-        try
-        {
-            if (ActiveClients.TryGetValue(client, out var name))
-            {
-                client.Shutdown(SocketShutdown.Receive);
+        client.Shutdown(SocketShutdown.Receive);
 
-                if (disconnectedByUser)
-                {
-                    Utils.LogServerMessage($"Client '{name}' ({client.RemoteEndPoint}) disconnected.", ConsoleColor.Yellow);
-                    await Utils.SendLineAsync(client, "BYE");
-                }
-
-                ActiveClients.Remove(client);
-                client.Close();
-                return true;
-            }
-            else
-            {
-                throw new Exception("Client not found");
-            }
-        }
-        catch (Exception ex)
+        if (ActiveClients.TryGetValue(client, out var _))
         {
-            Utils.LogServerMessage($"Error while disconnecting {client.RemoteEndPoint}: {ex.Message}", ConsoleColor.Red);
-            return false;
+            if (sendMessageToClient)
+                await Utils.SendLineAsync(client, "BYE");
+
+
+            ActiveClients.Remove(client);
         }
+        Utils.LogServerMessage($"Client {client.RemoteEndPoint} disconnected.", ConsoleColor.Yellow);
+        client.Close();
     }
 
-    internal async Task<bool> ClientDisconnected(Socket client)
-    {
-        try
-        {
-            if (ActiveClients.TryGetValue(client, out var name))
-            {
-                ActiveClients.Remove(client);
-                Utils.LogServerMessage($"Client '{name}' ({client.RemoteEndPoint}) disconnected.", ConsoleColor.Yellow);
-            }
-
-            await Utils.SendLineAsync(client, "BYE");
-            client.Close();
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Utils.LogServerMessage($"Error while disconnecting {client.RemoteEndPoint}: {ex.Message}", ConsoleColor.Red);
-            return false;
-        }
-    }
 
     internal async Task ListAllActiveUsers(Socket client)
     {

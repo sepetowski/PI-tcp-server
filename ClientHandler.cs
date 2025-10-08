@@ -49,7 +49,6 @@ public static class ClientHandler
             switch (parsed.Command)
             {
                 case KnewCoammnads.QUIT:
-                    await Utils.SendLineAsync(client, "BYE");
                     await server.QuitSession(client);
                     return;
 
@@ -145,6 +144,9 @@ public static class ClientHandler
         while (true)
         {
             var message = (await Utils.ReadAsync(client, buffer)).Trim();
+            if (message.Length == 0)
+                await server.QuitSession(client,false);
+
             var parsed = CommandParser.Parse(message);
 
             if (!parsed.Ok)
@@ -180,8 +182,6 @@ public static class ClientHandler
             switch (parsed.Command)
             {
                 case KnewCoammnads.QUIT:
-                    Utils.LogServerMessage($"Client {client.RemoteEndPoint} disconnected during authorization", ConsoleColor.Yellow);
-                    await Utils.SendLineAsync(client, "BYE");
                     await server.QuitSession(client);
                     return;
 
