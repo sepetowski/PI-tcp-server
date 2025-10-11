@@ -47,12 +47,10 @@ public class Server
 
     internal async Task ListAllActiveUsers(Socket client)
     {
-
-        foreach (var name in ActiveClients.Values)
-        {
-            await Utils.SendLineAsync(client, name);
-        }
-
+        string userList = string.Join(", ", ActiveClients.Values);
+        string message = $"USERS {userList}";
+        Utils.LogServerMessage(message, ConsoleColor.Yellow);
+        await Utils.SendLineAsync(client, message);
         Utils.LogServerMessage($"List of active users sent to {client.RemoteEndPoint}", ConsoleColor.DarkGray);
     }
 
@@ -64,28 +62,28 @@ public class Server
         if (targetClient == null)
         {
             Utils.LogServerMessage($"No user with id {target}", ConsoleColor.Red);
-            await Utils.SendLineAsync(client, "ERR_BADREQUEST");
+            await Utils.SendErrorAsync(client, Errors.BADREQUEST);
             return;
         }
 
         if (text.Length == 0)
         {
             Utils.LogServerMessage($"Invalid message from {client.RemoteEndPoint} to {target}", ConsoleColor.Red);
-            await Utils.SendLineAsync(client, "ERR_BADREQUEST");
+            await Utils.SendErrorAsync(client, Errors.BADREQUEST);
             return;
         }
 
         if (text.Length > 256)
         {
             Utils.LogServerMessage($"Message too long from {client.RemoteEndPoint} (>{text.Length} characters)", ConsoleColor.Red);
-            await Utils.SendLineAsync(client, "ERR_MESSAGETOOLARGE");
+            await Utils.SendErrorAsync(client, Errors.MESSAGETOOLARGE);
             return;
         }
 
         if (!ActiveClients.TryGetValue(client, out var senderId) || string.IsNullOrWhiteSpace(senderId))
         {
             Utils.LogServerMessage($"Client {client.RemoteEndPoint} tried to send a message without ID", ConsoleColor.Red);
-            await Utils.SendLineAsync(client, "ERR_BADREQUEST");
+            await Utils.SendErrorAsync(client, Errors.BADREQUEST);
             return;
         }
 
@@ -101,7 +99,7 @@ public class Server
         catch (Exception ex)
         {
             Utils.LogServerMessage($"Error sending message to '{target}' ({client.RemoteEndPoint}): {ex.Message}", ConsoleColor.Red);
-            await Utils.SendLineAsync(client, "ERR_TIMEOUT");
+            await Utils.SendErrorAsync(client, Errors.TIMEOUT);
         }
     }
 

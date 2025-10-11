@@ -8,6 +8,9 @@ public static class Utils
     public static Task<int> SendLineAsync(Socket client, string line)
         => client.SendAsync(Encoding.ASCII.GetBytes(line + "\n"), SocketFlags.None);
 
+    public static Task<int> SendErrorAsync(Socket client, Errors error)
+     => client.SendAsync(Encoding.ASCII.GetBytes(FormatError(error) + "\n"), SocketFlags.None);
+
     public static async Task<string> ReadAsync(Socket client, byte[] buffer)
     {
         var sb = new StringBuilder();
@@ -24,6 +27,10 @@ public static class Utils
         }
 
         return sb.ToString().Trim();
+    }
+    public static string FormatError(Errors error)
+    {
+        return $"ERR ERR_{error}";
     }
 
     public static void LogServerMessage(string message, ConsoleColor color = ConsoleColor.Gray)

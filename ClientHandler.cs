@@ -36,11 +36,11 @@ public static class ClientHandler
                 switch (parsed.Error)
                 {
                     case CommandParser.ParseError.UnknownCommand:
-                        await Utils.SendLineAsync(client, "ERR_NOSUCHCOMMAND");
+                        await Utils.SendErrorAsync(client, Errors.NOSUCHCOMMAND);
                         break;
                     case CommandParser.ParseError.MissingArgs:
                     case CommandParser.ParseError.TooManyArgs:
-                        await Utils.SendLineAsync(client, "ERR_BADREQUEST");
+                        await Utils.SendErrorAsync(client, Errors.BADREQUEST);
                         break;
                 }
                 continue;
@@ -53,7 +53,7 @@ public static class ClientHandler
                     return;
 
                 case KnewCoammnads.NAME:
-                    await Utils.SendLineAsync(client, "ERR_BADREQUEST");
+                    await Utils.SendErrorAsync(client, Errors.BADREQUEST);
                     break;
 
                 case KnewCoammnads.LIST:
@@ -156,24 +156,25 @@ public static class ClientHandler
                 switch (parsed.Error)
                 {
                     case CommandParser.ParseError.UnknownCommand:
+                        await Utils.SendErrorAsync(client, Errors.NOSUCHCOMMAND);
                         await Utils.SendLineAsync(client, "WHO");
                         continue;
 
                     case CommandParser.ParseError.MissingArgs:
                         if (parsed.Command == KnewCoammnads.NAME)
                         {
-                            await Utils.SendLineAsync(client, "ERR_NONICKNAMEGIVEN");
+                            await Utils.SendErrorAsync(client, Errors.NONICKNAMEGIVEN);
                             await Utils.SendLineAsync(client, "WHO");
                         }
                         else
                         {
-                            await Utils.SendLineAsync(client, "ERR_BADREQUEST");
+                            await  Utils.SendErrorAsync(client, Errors.BADREQUEST);
                             await Utils.SendLineAsync(client, "WHO");
                         }
                         continue;
 
                     case CommandParser.ParseError.TooManyArgs:
-                        await Utils.SendLineAsync(client, "ERR_BADREQUEST");
+                        await Utils.SendErrorAsync(client, Errors.BADREQUEST);
                         await Utils.SendLineAsync(client, "WHO");
                         continue;
                 }
@@ -198,7 +199,7 @@ public static class ClientHandler
 
                             case NameCheck.InUse:
                                 Utils.LogServerMessage($"Client {client.RemoteEndPoint} provided an already used ID: {id}", ConsoleColor.Yellow);
-                                await Utils.SendLineAsync(client, "ERR_NICKNAMEINUSE");
+                                await Utils.SendErrorAsync(client, Errors.NICKNAMEINUSE);
                                 await Utils.SendLineAsync(client, "WHO");
                                 continue;
 
@@ -206,11 +207,10 @@ public static class ClientHandler
                                 if (!server.ActiveClients.TryAdd(client, id))
                                 {
                                     Utils.LogServerMessage($"Failed to add ID {id} for {client.RemoteEndPoint} (already exists)", ConsoleColor.Red);
-                                    await Utils.SendLineAsync(client, "ERR_NICKNAMEINUSE");
+                                    await Utils.SendErrorAsync(client, Errors.BADREQUEST);
                                     await Utils.SendLineAsync(client, "WHO");
                                     continue;
                                 }
-
                                 Utils.LogServerMessage($"Authorization completed – {client.RemoteEndPoint} = '{id}'", ConsoleColor.Green);
                                 await Utils.SendLineAsync(client, "OK");
                                 return; // authorization finished
@@ -218,11 +218,6 @@ public static class ClientHandler
 
                         break;
                     }
-
-                default:
-                    Utils.LogServerMessage($"Unexpected command during authorization from {client.RemoteEndPoint}: {parsed.Command}", ConsoleColor.Yellow);
-                    await Utils.SendLineAsync(client, "WHO");
-                    continue;
             }
         }
     }
